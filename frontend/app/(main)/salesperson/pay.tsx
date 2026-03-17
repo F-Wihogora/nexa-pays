@@ -2,7 +2,7 @@ import { View, Text, ScrollView, Pressable, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { CheckCircle2, ArrowLeft, ShoppingCart, CreditCard, Trash2, Plus, Minus, Download } from 'lucide-react-native';
+import { CheckCircle2, ArrowLeft, ShoppingCart, CreditCard, Trash2, Plus, Minus, Download, XCircle } from 'lucide-react-native';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -79,9 +79,9 @@ export default function SalespersonPay() {
             console.log('💳 RFID card detected for payment:', data);
             setDetectedCard(data);
             
-            // Auto-process payment when card is detected and in checkout mode
-            if (isCheckoutMode && status === 'idle') {
-              await processPayment(data);
+            // Don't auto-process payment - wait for manual confirmation
+            if (status === 'scanning') {
+              setStatus('idle'); // Reset to idle when card is detected
             }
           };
 
@@ -104,7 +104,15 @@ export default function SalespersonPay() {
     };
   }, [isCheckoutMode, status]);
 
-  // Process payment with detected card
+  // Confirm and process payment with detected card
+  const confirmPayment = async () => {
+    if (!detectedCard) {
+      Alert.alert('No Card Detected', 'Please place an RFID card on the reader first.');
+      return;
+    }
+    
+    await processPayment(detectedCard);
+  };
   const processPayment = async (cardData: CardScannedEvent) => {
     setStatus('scanning');
     
@@ -219,11 +227,11 @@ export default function SalespersonPay() {
       return;
     }
     
-    // Just set to scanning mode - actual payment will be triggered by RFID detection
-    setStatus('scanning');
+    // Set to idle mode and wait for card detection
+    setStatus('idle');
     Alert.alert(
       'Ready for Payment',
-      'Please place the RFID card on the reader to process payment.',
+      'Please place the RFID card on the reader. You will need to confirm the payment after card detection.',
       [{ text: 'OK' }]
     );
   };
@@ -411,24 +419,133 @@ export default function SalespersonPay() {
               </View>
             )}
 
-            {/* Detected Card Info */}
+            {/* Detected Card Info - Improved UI */}
             {detectedCard && status !== 'success' && (
-              <View className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-                <View className="flex-row items-center justify-between">
-                  <View>
-                    <Text style={{ color: '#1d4ed8' }} className="font-semibold text-sm mb-1">
-                      Card Detected: {detectedCard.uid}
-                    </Text>
-                    <Text style={{ color: '#1e40af' }} className="text-sm">
-                      Balance: ${detectedCard.deviceBalance.toFixed(2)}
-                    </Text>
+              <View className="mb-4">
+                <View 
+                  style={{ 
+                    backgroundColor: detectedCard.deviceBalance >= (getTotalPrice() / 100) ? '#dcfce7' : '#fef2f2',
+                    borderColor: detectedCard.deviceBalance >= (getTotalPrice() / 100) ? '#16a34a' : '#dc2626',
+                    borderWidth: 2,
+                    borderRadius: 16,
+                    padding: 16,
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Background decoration */}
+                  <View 
+                    style={{ 
+                      position: 'absolute',
+                      top: -20,
+                      right: -20,
+                      width: 80,
+                      height: 80,
+                      borderRadius: 40,
+                      backgroundColor: detectedCard.deviceBalance >= (getTotalPrice() / 100) ? '#16a34a' : '#dc2626',
+                      opacity: 0.1
+                    }}
+                  />
+                  
+                  {/* Card icon and status */}
+                  <View className="flex-row items-center justify-between mb-3">
+                    <View className="flex-row items-center">
+                      <View 
+                        style={{ 
+                          backgroundColor: detectedCard.deviceBalance >= (getTotalPrice() / 100) ? '#16a34a' : '#dc2626',
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 12
+                        }}
+                      >
+                        <CreditCard size={20} color="white" />
+                      </View>
+                      <View>
+                        <Text 
+                          style={{ 
+                            color: detectedCard.deviceBalance >= (getTotalPrice() / 100) ? '#15803d' : '#b91c1c',
+                            fontFamily: 'Poppins_700Bold'
+                          }} 
+                          className="text-base"
+                        >
+                          Card Detected
+                        </Text>
+                        <Text 
+                          style={{ 
+                            color: detectedCard.deviceBalance >= (getTotalPrice() / 100) ? '#16a34a' : '#dc2626',
+                            fontFamily: 'Poppins_500Medium'
+                          }} 
+                          className="text-sm"
+                        >
+                          {detectedCard.uid}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <Pressable 
+                      onPress={() => setDetectedCard(null)}
+                      className="bg-white/80 px-3 py-2 rounded-lg border border-gray-200"
+                    >
+                      <Text style={{ color: '#64748b', fontFamily: 'Poppins_500Medium' }} className="text-xs">
+                        Clear
+                      </Text>
+                    </Pressable>
                   </View>
-                  <Pressable 
-                    onPress={() => setDetectedCard(null)}
-                    className="bg-slate-100 px-3 py-1 rounded-lg"
-                  >
-                    <Text style={{ color: '#64748b' }} className="text-xs font-medium">Clear</Text>
-                  </Pressable>
+                  
+                  {/* Balance and payment info */}
+                  <View className="flex-row justify-between items-center">
+                    <View>
+                      <Text style={{ color: '#64748b', fontFamily: 'Poppins_500Medium' }} className="text-xs mb-1">
+                        Card Balance
+                      </Text>
+                      <Text 
+                        style={{ 
+                          color: detectedCard.deviceBalance >= (getTotalPrice() / 100) ? '#15803d' : '#b91c1c',
+                          fontFamily: 'Poppins_800ExtraBold'
+                        }} 
+                        className="text-xl"
+                      >
+                        ${detectedCard.deviceBalance.toFixed(2)}
+                      </Text>
+                    </View>
+                    
+                    <View className="items-end">
+                      <Text style={{ color: '#64748b', fontFamily: 'Poppins_500Medium' }} className="text-xs mb-1">
+                        Required Amount
+                      </Text>
+                      <Text style={{ color: primaryNavy, fontFamily: 'Poppins_800ExtraBold' }} className="text-xl">
+                        ${(getTotalPrice() / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* Status indicator */}
+                  <View className="mt-4 pt-4 border-t border-white/50">
+                    {detectedCard.deviceBalance >= (getTotalPrice() / 100) ? (
+                      <View className="flex-row items-center">
+                        <CheckCircle2 size={16} color="#16a34a" />
+                        <Text 
+                          style={{ color: '#15803d', fontFamily: 'Poppins_600SemiBold' }} 
+                          className="text-sm ml-2"
+                        >
+                          ✅ Sufficient balance - Ready for payment
+                        </Text>
+                      </View>
+                    ) : (
+                      <View className="flex-row items-center">
+                        <XCircle size={16} color="#dc2626" />
+                        <Text 
+                          style={{ color: '#b91c1c', fontFamily: 'Poppins_600SemiBold' }} 
+                          className="text-sm ml-2"
+                        >
+                          ❌ Insufficient balance - Need ${((getTotalPrice() / 100) - detectedCard.deviceBalance).toFixed(2)} more
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
             )}
@@ -553,13 +670,23 @@ export default function SalespersonPay() {
                   {status === 'idle' && !detectedCard && (
                     <View className="items-center mt-4">
                       <Text className="text-gray-500 text-sm mb-4">
-                        Hold your card close to the RFID reader device to complete payment
+                        Hold your card close to the RFID reader device to detect it
                       </Text>
                       {!isWebSocketConnected && (
                         <Text className="text-red-500 text-sm mb-4">
                           ⚠️ RFID system is offline. Please check connection.
                         </Text>
                       )}
+                      <Pressable 
+                        onPress={() => {
+                          setIsCheckoutMode(false);
+                          setDetectedCard(null);
+                          setStatus('idle');
+                        }}
+                        className="bg-gray-100 px-6 py-3 rounded-xl"
+                      >
+                        <Text style={{ color: primaryNavy }} className="font-bold">Cancel Payment</Text>
+                      </Pressable>
                     </View>
                   )}
 
@@ -572,13 +699,49 @@ export default function SalespersonPay() {
                         Balance: ${detectedCard.deviceBalance.toFixed(2)} | Required: ${(getTotalPrice() / 100).toFixed(2)}
                       </Text>
                       {detectedCard.deviceBalance >= (getTotalPrice() / 100) ? (
-                        <Text className="text-green-600 text-sm font-semibold">
-                          ✅ Sufficient balance - Payment will process automatically
-                        </Text>
+                        <View className="items-center">
+                          <Text className="text-green-600 text-sm font-semibold mb-4">
+                            ✅ Sufficient balance available
+                          </Text>
+                          <Pressable 
+                            onPress={confirmPayment}
+                            style={{ backgroundColor: '#16a34a' }}
+                            className="px-8 py-4 rounded-xl shadow-lg"
+                          >
+                            <Text className="text-white font-bold text-lg">Confirm Payment</Text>
+                          </Pressable>
+                        </View>
                       ) : (
-                        <Text className="text-red-500 text-sm font-semibold">
-                          ❌ Insufficient balance - Need ${((getTotalPrice() / 100) - detectedCard.deviceBalance).toFixed(2)} more
-                        </Text>
+                        <View className="items-center">
+                          <Text className="text-red-500 text-sm font-semibold mb-4">
+                            ❌ Insufficient balance - Need ${((getTotalPrice() / 100) - detectedCard.deviceBalance).toFixed(2)} more
+                          </Text>
+                          <View className="flex-row">
+                            <Pressable 
+                              onPress={() => {
+                                setDetectedCard(null);
+                              }}
+                              className="bg-gray-100 px-6 py-3 rounded-xl mr-3"
+                            >
+                              <Text style={{ color: primaryNavy }} className="font-bold">Try Another Card</Text>
+                            </Pressable>
+                            <Pressable 
+                              onPress={() => {
+                                Alert.alert(
+                                  'Insufficient Balance',
+                                  'This card does not have enough balance. Please:\n\n1. Use a different card with sufficient balance\n2. Top-up this card first\n3. Cancel the transaction',
+                                  [
+                                    { text: 'OK' }
+                                  ]
+                                );
+                              }}
+                              style={{ backgroundColor: '#dc2626' }}
+                              className="px-6 py-3 rounded-xl"
+                            >
+                              <Text className="text-white font-bold">Details</Text>
+                            </Pressable>
+                          </View>
+                        </View>
                       )}
                     </View>
                   )}
