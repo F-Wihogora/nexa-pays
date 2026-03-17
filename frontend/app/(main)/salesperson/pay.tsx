@@ -1018,6 +1018,14 @@ Time: ${receiptData.time}
 Cashier: ${receiptData.cashier}
 
 ═══════════════════════════════════
+              PAYMENT INFO
+═══════════════════════════════════
+Card UID: ${receiptData.cardUID}
+Previous Balance: $${receiptData.previousBalance.toFixed(2)}
+Amount Paid: $${receiptData.totalAmount}
+New Balance: $${receiptData.newBalance.toFixed(2)}
+
+═══════════════════════════════════
                 ITEMS
 ═══════════════════════════════════
 ${receiptData.items.map(item => 
@@ -1026,8 +1034,7 @@ ${receiptData.items.map(item =>
 ).join('\n\n')}
 
 ═══════════════════════════════════
-Subtotal:                   $${receiptData.subtotal}
-TOTAL:                      $${receiptData.totalAmount}
+TOTAL PAID:                 $${receiptData.totalAmount}
 
 Payment Method: ${receiptData.paymentMethod}
 ═══════════════════════════════════
