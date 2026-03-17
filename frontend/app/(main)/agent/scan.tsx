@@ -89,20 +89,44 @@ export default function AgentScanScreen() {
           console.log('✅ WebSocket connected successfully');
           
           // Listen for real RFID card detections
-          const handleCardScanned = (data: CardScannedEvent) => {
+          const handleCardScanned = async (data: CardScannedEvent) => {
             console.log('📱 Real RFID card detected:', data);
             setLastScannedCard(data);
             
-            // Auto-stop scanning when card is detected
-            if (isScanning) {
-              setIsScanning(false);
-              
-              // Update scan result with real card data
-              setScanResult({
-                id: data.uid,
-                name: currentUser?.username || 'Card Holder',
-                balance: data.deviceBalance
-              });
+            // Get fresh balance from backend for the detected card
+            try {
+              const balanceResponse = await apiService.getBalance(data.uid);
+              if (balanceResponse.success) {
+                // Update the card data with fresh balance
+                const updatedCardData = {
+                  ...data,
+                  deviceBalance: balanceResponse.balance
+                };
+                setLastScannedCard(updatedCardData);
+                
+                // Auto-stop scanning when card is detected
+                if (isScanning) {
+                  setIsScanning(false);
+                  
+                  // Update scan result with real card data and fresh balance
+                  setScanResult({
+                    id: data.uid,
+                    name: currentUser?.username || 'Card Holder',
+                    balance: balanceResponse.balance
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Failed to get fresh balance:', error);
+              // Still show the card with device balance if API fails
+              if (isScanning) {
+                setIsScanning(false);
+                setScanResult({
+                  id: data.uid,
+                  name: currentUser?.username || 'Card Holder',
+                  balance: data.deviceBalance
+                });
+              }
             }
           };
 
@@ -276,31 +300,66 @@ export default function AgentScanScreen() {
   };
 
   const NexaCard = () => {
-    // Use first user card or show placeholder
-    const primaryCard = userCards.length > 0 ? userCards[0] : null;
-    const displayBalance = primaryCard ? primaryCard.balance / 100 : 0; // Convert from cents to dollars
+    // Priority: 1. Last scanned card, 2. Scan result, 3. First user card, 4. No card
+    let displayCard = null;
+    let displayBalance = 0;
+    let cardSource = 'none';
+
+    if (lastScannedCard) {
+      displayCard = { cardUid: lastScannedCard.uid };
+      displayBalance = lastScannedCard.deviceBalance;
+      cardSource = 'scanned';
+    } else if (scanResult) {
+      displayCard = { cardUid: scanResult.id };
+      displayBalance = scanResult.balance;
+      cardSource = 'result';
+    } else if (userCards.length > 0) {
+      displayCard = userCards[0];
+      displayBalance = displayCard.balance / 100; // Convert from cents to dollars
+      cardSource = 'user';
+    }
     
     return (
       <View className="px-4 mt-2">
         <View 
-          style={{ height: 280, backgroundColor: primaryNavy, borderRadius: 16, padding: 30 }} 
+          style={{ 
+            height: 280, 
+            backgroundColor: displayCard ? primaryNavy : '#64748b', 
+            borderRadius: 16, 
+            padding: 30 
+          }} 
           className="shadow-2xl shadow-blue-900/20 border border-blue-100 relative overflow-hidden"
         >
           <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', width: 200, height: 200, borderRadius: 100, position: 'absolute', top: -100, right: -100 }} />
+          
+          {/* Status indicator for scanned cards */}
+          {cardSource === 'scanned' && (
+            <View className="absolute top-4 left-4">
+              <View className="bg-green-500 px-2 py-1 rounded-full flex-row items-center">
+                <View className="w-2 h-2 bg-white rounded-full mr-1" />
+                <Text style={{ color: 'white', fontFamily: 'Poppins_600SemiBold' }} className="text-xs">
+                  LIVE
+                </Text>
+              </View>
+            </View>
+          )}
+          
           <View className="flex-row justify-between items-start mb-6">
             <View style={{ backgroundColor: '#FFD700', width: 50, height: 38, borderRadius: 8, opacity: 0.9, position: 'relative', overflow: 'hidden' }}>
                <View className="absolute inset-0 border border-black/10 opacity-20" />
                <View className="absolute top-1/2 w-full h-[1px] bg-black/10" />
                <View className="absolute left-1/2 h-full w-[1px] bg-black/10" />
             </View>
-            <Wifi size={24} color="white" opacity={0.6} />
+            <Wifi size={24} color="white" opacity={displayCard ? 0.6 : 0.3} />
           </View>
+          
           <Text style={{ 
             color: 'white',
             fontFamily: 'Poppins_900Black'
           }} className="text-2xl tracking-[4px] mb-8 opacity-80">
-            **** **** **** ****
+            {displayCard ? '**** **** **** ****' : '---- ---- ---- ----'}
           </Text>
+          
           <View className="flex-row justify-between items-end mt-auto">
             <View>
               <Text style={{ 
@@ -313,9 +372,17 @@ export default function AgentScanScreen() {
                   color: 'white',
                   fontFamily: 'Poppins_900Black'
                 }} className="text-lg tracking-tighter">
-                  {primaryCard ? primaryCard.cardUid : 'No Card'}
+                  {displayCard ? displayCard.cardUid : 'No Card'}
                 </Text>
               </View>
+              {cardSource === 'scanned' && (
+                <Text style={{ 
+                  color: 'rgba(34, 197, 94, 0.8)',
+                  fontFamily: 'Poppins_500Medium'
+                }} className="text-xs mt-1">
+                  Detected: {new Date(lastScannedCard!.timestamp).toLocaleTimeString()}
+                </Text>
+              )}
             </View>
             <View className="items-end">
               <Text style={{ 
@@ -326,8 +393,16 @@ export default function AgentScanScreen() {
                 color: 'white',
                 fontFamily: 'Poppins_900Black'
               }} className="text-2xl">
-                {isLoading ? '...' : convertCurrency(displayBalance)}
+                {isLoading ? '...' : displayCard ? convertCurrency(displayBalance) : '--'}
               </Text>
+              {cardSource === 'scanned' && (
+                <Text style={{ 
+                  color: 'rgba(34, 197, 94, 0.8)',
+                  fontFamily: 'Poppins_500Medium'
+                }} className="text-xs">
+                  Live Balance
+                </Text>
+              )}
             </View>
           </View>
         </View>
@@ -346,6 +421,26 @@ export default function AgentScanScreen() {
       
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <NexaCard />
+        
+        {/* Clear Card Button */}
+        {(lastScannedCard || scanResult) && (
+          <View className="px-4 mt-4">
+            <Pressable 
+              onPress={() => {
+                setLastScannedCard(null);
+                setScanResult(null);
+              }}
+              className="bg-slate-100 px-4 py-3 rounded-xl border border-slate-200 flex-row items-center justify-center"
+            >
+              <Text style={{ 
+                color: '#64748b',
+                fontFamily: 'Poppins_600SemiBold'
+              }} className="text-sm">
+                Clear Card Display
+              </Text>
+            </Pressable>
+          </View>
+        )}
         
         <View className="px-6 mt-10">
           {/* Connection Status */}
