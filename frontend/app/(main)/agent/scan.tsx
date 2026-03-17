@@ -93,6 +93,27 @@ export default function AgentScanScreen() {
             console.log('📱 Real RFID card detected:', data);
             setLastScannedCard(data);
             
+            // Check if this card is already assigned to the user
+            const isCardAssigned = userCards.some(card => card.cardUid === data.uid);
+            
+            // If card is not assigned, try to assign it automatically
+            if (!isCardAssigned) {
+              try {
+                console.log('🔗 Auto-assigning detected card to user:', data.uid);
+                await apiService.assignCardToUser(data.uid);
+                
+                // Reload user cards to include the newly assigned card
+                const cardsResponse = await apiService.getUserCards();
+                if (cardsResponse.success) {
+                  setUserCards(cardsResponse.cards || []);
+                  console.log('✅ Card assigned and user cards reloaded');
+                }
+              } catch (assignError) {
+                console.error('Failed to assign card:', assignError);
+                // Continue with the detection even if assignment fails
+              }
+            }
+            
             // Get fresh balance from backend for the detected card
             try {
               const balanceResponse = await apiService.getBalance(data.uid);
