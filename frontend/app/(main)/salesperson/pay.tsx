@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, Alert, Image, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, Image, Platform, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -16,7 +16,6 @@ import { StorageService } from '../../../services/storage';
 import { User, apiService } from '../../../services/api';
 import { webSocketService, CardScannedEvent } from '../../../services/websocket';
 import { useCart } from '../../../contexts/CartContext';
-import RNFS from 'react-native-fs';
 
 export default function SalespersonPay() {
   const router = useRouter();
@@ -1043,25 +1042,21 @@ Payment Method: ${receiptData.paymentMethod}
 ═══════════════════════════════════
                       `;
                       
-                      // Determine the correct directory based on platform
-                      const downloadDir = Platform.OS === 'android' 
-                        ? RNFS.DownloadDirectoryPath 
-                        : RNFS.DocumentDirectoryPath;
+                      // Share the receipt using native share functionality
+                      try {
+                        await Share.share({
+                          message: receiptText,
+                          title: `Receipt - ${receiptData.transactionId}`,
+                        });
+                        console.log('✅ Receipt shared successfully');
+                      } catch (shareError) {
+                        console.log('Share cancelled or failed:', shareError);
+                      }
                       
-                      // Create filename with timestamp
-                      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                      const filename = `Nexa_Receipt_${receiptData.transactionId}_${timestamp}.txt`;
-                      const filePath = `${downloadDir}/${filename}`;
-                      
-                      // Write the receipt to file
-                      await RNFS.writeFile(filePath, receiptText, 'utf8');
-                      
-                      console.log('✅ Receipt saved to:', filePath);
-                      
-                      // Show success message with file location
+                      // Show success message
                       Alert.alert(
-                        '✅ Receipt Downloaded!', 
-                        `Receipt details:\n\n📄 Transaction: ${receiptData.transactionId}\n💰 Total: $${receiptData.totalAmount}\n📅 ${receiptData.date}\n🕐 ${receiptData.time}\n\nReceipt has been prepared for download.`,
+                        '✅ Receipt Generated!', 
+                        `Receipt created successfully!\n\n📄 Transaction: ${receiptData.transactionId}\n💰 Total: $${receiptData.totalAmount}\n📅 ${receiptData.date}\n🕐 ${receiptData.time}\n\n📱 Receipt has been shared - you can save it to your device`,
                         [
                           { 
                             text: 'View Receipt', 
