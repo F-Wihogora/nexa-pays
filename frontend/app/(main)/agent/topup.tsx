@@ -22,7 +22,7 @@ import { AgentTopbar } from '../../../components/AgentTopbar';
 import { AgentBottomNav } from '../../../components/AgentBottomNav';
 import { StorageService } from '../../../services/storage';
 import { User, apiService } from '../../../services/api';
-import { Alert } from 'react-native';
+import { webSocketService, CardScannedEvent } from '../../../services/websocket';
 
 export default function AgentTopupScreen() {
   const router = useRouter();
@@ -33,6 +33,8 @@ export default function AgentTopupScreen() {
   const [cardUID, setCardUID] = useState('');
   const [userCards, setUserCards] = useState([]);
   const [selectedCard, setSelectedCard] = useState(null);
+  const [detectedCard, setDetectedCard] = useState<CardScannedEvent | null>(null);
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
 
   // Load current user data and their cards
   useEffect(() => {
@@ -62,6 +64,41 @@ export default function AgentTopupScreen() {
       }
     };
     loadUserData();
+  }, []);
+
+  // WebSocket connection for real-time RFID detection
+  useEffect(() => {
+    const connectWebSocket = async () => {
+      try {
+        const connected = await webSocketService.connect();
+        setIsWebSocketConnected(connected);
+        
+        if (connected) {
+          // Listen for real RFID card detections
+          const handleCardScanned = (data: CardScannedEvent) => {
+            console.log('📱 RFID card detected in topup:', data);
+            setDetectedCard(data);
+            setCardUID(data.uid);
+            setSelectedCard(null); // Clear user card selection when RFID detected
+          };
+
+          webSocketService.on('card-scanned', handleCardScanned);
+
+          return () => {
+            webSocketService.off('card-scanned', handleCardScanned);
+          };
+        }
+      } catch (error) {
+        console.error('WebSocket connection error:', error);
+        setIsWebSocketConnected(false);
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      webSocketService.disconnect();
+    };
   }, []);
 
   const handleTopUp = async () => {
