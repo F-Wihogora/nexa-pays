@@ -231,11 +231,14 @@ void publish_health()
 // ==========================================
 void publish_card_scan(String uid)
 {
-    double currentBalance = 50.0; // Simulated
+    // Note: ESP8266 doesn't have direct database access
+    // The backend will handle balance lookup and update this message
+    // We send a placeholder balance that the backend will replace
+    double placeholderBalance = 0.0; // Backend will update with real balance
 
     StaticJsonDocument<256> doc;
     doc["uid"] = uid;
-    doc["balance"] = currentBalance;
+    doc["balance"] = placeholderBalance;
     doc["status"] = "detected";
     doc["device"] = "ESP8266_RFID";
     doc["ts"] = get_unix_time();
